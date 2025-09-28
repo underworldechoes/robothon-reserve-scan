@@ -14,7 +14,140 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      categories: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: number
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: number
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: number
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      inventory_tracking: {
+        Row: {
+          id: string
+          notes: string | null
+          part_id: number
+          scanned_at: string
+          status: string
+          team_user_id: string
+        }
+        Insert: {
+          id?: string
+          notes?: string | null
+          part_id: number
+          scanned_at?: string
+          status: string
+          team_user_id: string
+        }
+        Update: {
+          id?: string
+          notes?: string | null
+          part_id?: number
+          scanned_at?: string
+          status?: string
+          team_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_tracking_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "parts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_tracking_team_user_id_fkey"
+            columns: ["team_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      parts: {
+        Row: {
+          category_id: number
+          created_at: string
+          description: string | null
+          id: number
+          image_url: string | null
+          name: string
+          quantity: number
+          updated_at: string
+        }
+        Insert: {
+          category_id: number
+          created_at?: string
+          description?: string | null
+          id?: number
+          image_url?: string | null
+          name: string
+          quantity?: number
+          updated_at?: string
+        }
+        Update: {
+          category_id?: number
+          created_at?: string
+          description?: string | null
+          id?: number
+          image_url?: string | null
+          name?: string
+          quantity?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parts_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["user_role"]
+          updated_at: string
+          user_id: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+          user_id: string
+          username: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+          user_id?: string
+          username?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +156,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      user_role: "admin" | "team"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +283,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      user_role: ["admin", "team"],
+    },
   },
 } as const

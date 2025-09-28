@@ -2,6 +2,7 @@ import { useState } from "react";
 import Login from "./Login";
 import TeamDashboard from "./TeamDashboard";
 import CategoryProducts from "./CategoryProducts";
+import AdminDashboard from "./AdminDashboard";
 
 type AppState = {
   currentView: "login" | "team-dashboard" | "category-products" | "admin-dashboard";
@@ -75,20 +76,11 @@ const Index = () => {
       );
     
     case "admin-dashboard":
-      // TODO: Implement admin dashboard
       return (
-        <div className="min-h-screen flex items-center justify-center bg-background">
-          <div className="text-center">
-            <h1 className="mb-4 text-4xl font-bold">Admin Dashboard</h1>
-            <p className="text-xl text-muted-foreground mb-4">Coming soon...</p>
-            <button 
-              onClick={handleLogout}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded"
-            >
-              Logout
-            </button>
-          </div>
-        </div>
+        <AdminDashboard 
+          onLogout={handleLogout}
+          userData={appState.userData}
+        />
       );
     
     default:

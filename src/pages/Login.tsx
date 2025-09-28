@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Package, Users, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface LoginProps {
   onLogin: (role: "team" | "admin", credentials: any) => void;
@@ -20,20 +21,84 @@ export default function Login({ onLogin }: LoginProps) {
     setIsLoading(true);
 
     const formData = new FormData(e.currentTarget);
-    const credentials = {
-      username: formData.get("username"),
-      password: formData.get("password"),
-    };
+    const email = formData.get("username") as string;
+    const password = formData.get("password") as string;
 
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      // For admin login, use default credentials
+      if (role === "admin" && email === "admin" && password === "admin123") {
+        // Sign up the admin user if doesn't exist, then sign in
+        const { error: signUpError } = await supabase.auth.signUp({
+          email: "admin@robothon.com",
+          password: "admin123",
+        });
+
+        if (signUpError && !signUpError.message.includes("already registered")) {
+          throw signUpError;
+        }
+
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email: "admin@robothon.com",
+          password: "admin123",
+        });
+
+        if (signInError) throw signInError;
+
+        // Create or update admin profile
+        if (data.user) {
+          const { error: profileError } = await supabase
+            .from("profiles")
+            .upsert({
+              user_id: data.user.id,
+              username: "admin",
+              role: "admin",
+            });
+
+          if (profileError && !profileError.message.includes("duplicate key")) {
+            console.warn("Profile creation warning:", profileError);
+          }
+        }
+
+        toast({
+          title: "Login successful",
+          description: "Welcome Administrator!",
+        });
+        onLogin(role, { user: data.user, session: data.session });
+      } else {
+        // Regular user login
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email: email,
+          password: password,
+        });
+
+        if (signInError) throw signInError;
+
+        // Get user profile to determine role
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("user_id", data.user.id)
+          .single();
+
+        if (!profile) {
+          throw new Error("User profile not found");
+        }
+
+        toast({
+          title: "Login successful",
+          description: `Welcome ${profile.role === "admin" ? "Administrator" : "Team Member"}!`,
+        });
+        onLogin(profile.role, { user: data.user, session: data.session, profile });
+      }
+    } catch (error: any) {
       toast({
-        title: "Login successful",
-        description: `Welcome ${role === "admin" ? "Administrator" : "Team Member"}!`,
+        title: "Login failed",
+        description: error.message || "Invalid credentials",
+        variant: "destructive",
       });
-      onLogin(role, credentials);
-    }, 1000);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -74,11 +139,12 @@ export default function Login({ onLogin }: LoginProps) {
               <TabsContent value="team" className="space-y-4 mt-6">
                 <form onSubmit={(e) => handleSubmit(e, "team")} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="team-username">Team Username</Label>
+                    <Label htmlFor="team-username">Email</Label>
                     <Input 
                       id="team-username" 
                       name="username"
-                      placeholder="Enter team username"
+                      type="email"
+                      placeholder="Enter team email"
                       required 
                     />
                   </div>
@@ -105,7 +171,8 @@ export default function Login({ onLogin }: LoginProps) {
                     <Input 
                       id="admin-username" 
                       name="username"
-                      placeholder="Enter admin username"
+                      placeholder="admin"
+                      defaultValue="admin"
                       required 
                     />
                   </div>
@@ -115,9 +182,13 @@ export default function Login({ onLogin }: LoginProps) {
                       id="admin-password" 
                       name="password"
                       type="password" 
-                      placeholder="Enter password"
+                      placeholder="admin123"
+                      defaultValue="admin123"
                       required 
                     />
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Default admin credentials: admin / admin123
                   </div>
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? "Signing in..." : "Sign in as Admin"}
