@@ -28,8 +28,9 @@ export default function UserManagement({ onStatsUpdate }: UserManagementProps) {
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
+const [isLoading, setIsLoading] = useState(false);
+const [createdCreds, setCreatedCreds] = useState<{ email: string; password: string } | null>(null);
+const { toast } = useToast();
 
   useEffect(() => {
     loadUsers();
@@ -53,44 +54,54 @@ export default function UserManagement({ onStatsUpdate }: UserManagementProps) {
     }
   };
 
-  const handleAddUser = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsLoading(true);
+const handleAddUser = async (e: React.FormEvent<HTMLFormElement>) => {
+  e.preventDefault();
+  setIsLoading(true);
+  setCreatedCreds(null);
 
-    const formData = new FormData(e.currentTarget);
-    const username = formData.get("username") as string;
-    const role = formData.get("role") as "admin" | "team";
+  const formData = new FormData(e.currentTarget);
+  const username = (formData.get("username") as string).trim();
+  const role = (formData.get("role") as "admin" | "team") || "team";
+  const password = (formData.get("password") as string).trim();
 
-    try {
-      // Create profile directly without auth user
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .insert([{
-          user_id: crypto.randomUUID(), // Generate a random UUID for user_id
-          username,
-          role,
-        }]);
+  try {
+    if (username.length < 3) throw new Error("Username must be at least 3 characters");
+    if (password.length < 6) throw new Error("Password must be at least 6 characters");
 
-      if (profileError) throw profileError;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error("Not authenticated");
 
-      toast({
-        title: "User created",
-        description: `${username} has been created successfully.`,
-      });
+    const res = await fetch("https://aqtggtwyazowfadrbljb.supabase.co/functions/v1/admin-create-user", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ username, password, role }),
+    });
 
-      setIsAddDialogOpen(false);
-      loadUsers();
-      onStatsUpdate();
-    } catch (error: any) {
-      toast({
-        title: "Error creating user",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || "Failed to create user");
+
+    setCreatedCreds({ email: json.email, password });
+
+    toast({
+      title: "User created",
+      description: `${username} has been created successfully.`,
+    });
+
+    loadUsers();
+    onStatsUpdate();
+  } catch (error: any) {
+    toast({
+      title: "Error creating user",
+      description: error.message,
+      variant: "destructive",
+    });
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleEditUser = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -184,38 +195,58 @@ export default function UserManagement({ onStatsUpdate }: UserManagementProps) {
                 </Button>
               </DialogTrigger>
               <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add New User</DialogTitle>
-                  <DialogDescription>Create a new team member account</DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handleAddUser}>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="username">Username</Label>
-                      <Input id="username" name="username" placeholder="e.g., team01" required />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="role">Role</Label>
-                      <Select name="role" defaultValue="team">
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="team">Team Member</SelectItem>
-                          <SelectItem value="admin">Administrator</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <DialogFooter className="mt-6">
-                    <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={isLoading}>
-                      {isLoading ? "Creating..." : "Create User"}
-                    </Button>
-                  </DialogFooter>
-                </form>
+<DialogHeader>
+  <DialogTitle>Add New User</DialogTitle>
+  <DialogDescription>Create a new team member account</DialogDescription>
+</DialogHeader>
+<form onSubmit={handleAddUser}>
+  <div className="space-y-4">
+    <div className="space-y-2">
+      <Label htmlFor="username">Username</Label>
+      <Input id="username" name="username" placeholder="e.g., team01" required />
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor="password">Temporary Password</Label>
+      <Input id="password" name="password" type="password" placeholder="min 6 characters" required />
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor="role">Role</Label>
+      <Select name="role" defaultValue="team">
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="team">Team Member</SelectItem>
+          <SelectItem value="admin">Administrator</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+
+    {createdCreds && (
+      <div className="rounded-md border p-3 text-sm">
+        <div className="mb-2 font-medium">Credentials created</div>
+        <div className="flex items-center justify-between">
+          <div>
+            <div>Email: {createdCreds.email}</div>
+            <div>Password: {createdCreds.password}</div>
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => navigator.clipboard.writeText(createdCreds.email)}>Copy email</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => navigator.clipboard.writeText(createdCreds.password)}>Copy password</Button>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+  <DialogFooter className="mt-6">
+    <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+      Close
+    </Button>
+    <Button type="submit" disabled={isLoading}>
+      {isLoading ? "Creating..." : "Create User"}
+    </Button>
+  </DialogFooter>
+</form>
               </DialogContent>
             </Dialog>
           </div>

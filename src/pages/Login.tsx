@@ -17,6 +17,14 @@ export default function Login({ onLogin }: LoginProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
+  // Ensure default admin exists (idempotent)
+  useEffect(() => {
+    supabase.functions.invoke("bootstrap-admin").catch(() => {
+      // ignore bootstrap errors silently
+    });
+  }, []);
+
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>, role: "team" | "admin") => {
     e.preventDefault();
     setIsLoading(true);
