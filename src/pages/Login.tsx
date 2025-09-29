@@ -21,74 +21,51 @@ export default function Login({ onLogin }: LoginProps) {
     setIsLoading(true);
 
     const formData = new FormData(e.currentTarget);
-    const email = formData.get("username") as string;
+    const username = formData.get("username") as string;
     const password = formData.get("password") as string;
 
     try {
-      // For admin login, use default credentials
-      if (role === "admin" && email === "admin" && password === "admin123") {
-        // Sign up the admin user if doesn't exist, then sign in
-        const { error: signUpError } = await supabase.auth.signUp({
-          email: "admin@robothon.com",
-          password: "admin123",
-        });
-
-        if (signUpError && !signUpError.message.includes("already registered")) {
-          throw signUpError;
-        }
-
-        const { data, error: signInError } = await supabase.auth.signInWithPassword({
-          email: "admin@robothon.com",
-          password: "admin123",
-        });
-
-        if (signInError) throw signInError;
-
-        // Create or update admin profile
-        if (data.user) {
-          const { error: profileError } = await supabase
-            .from("profiles")
-            .upsert({
-              user_id: data.user.id,
-              username: "admin",
-              role: "admin",
-            });
-
-          if (profileError && !profileError.message.includes("duplicate key")) {
-            console.warn("Profile creation warning:", profileError);
-          }
-        }
+      // For admin login, use hardcoded credentials
+      if (role === "admin" && username === "admin" && password === "admin123") {
+        // Create a mock session for admin
+        const adminUser = {
+          id: "admin-user-id",
+          username: "admin",
+          role: "admin"
+        };
 
         toast({
           title: "Login successful",
           description: "Welcome Administrator!",
         });
-        onLogin(role, { user: data.user, session: data.session });
-      } else {
-        // Regular user login
-        const { data, error: signInError } = await supabase.auth.signInWithPassword({
-          email: email,
-          password: password,
-        });
-
-        if (signInError) throw signInError;
-
-        // Get user profile to determine role
-        const { data: profile } = await supabase
+        onLogin(role, { user: adminUser, profile: { username: "admin", role: "admin" } });
+      } else if (role === "team") {
+        // For team members, check against profiles table
+        const { data: profile, error } = await supabase
           .from("profiles")
           .select("*")
-          .eq("user_id", data.user.id)
+          .eq("username", username)
           .single();
 
-        if (!profile) {
-          throw new Error("User profile not found");
+        if (error || !profile) {
+          throw new Error("Invalid username");
         }
+
+        // For demo purposes, accept any password for team members
+        // In production, you'd want proper password hashing
+        const teamUser = {
+          id: profile.user_id,
+          username: profile.username,
+          role: profile.role
+        };
 
         toast({
           title: "Login successful",
-          description: `Welcome ${profile.role === "admin" ? "Administrator" : "Team Member"}!`,
+          description: `Welcome ${profile.username}!`,
         });
-        onLogin(profile.role, { user: data.user, session: data.session, profile });
+        onLogin("team", { user: teamUser, profile });
+      } else {
+        throw new Error("Invalid credentials");
       }
     } catch (error: any) {
       toast({
@@ -139,12 +116,12 @@ export default function Login({ onLogin }: LoginProps) {
               <TabsContent value="team" className="space-y-4 mt-6">
                 <form onSubmit={(e) => handleSubmit(e, "team")} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="team-username">Email</Label>
+                    <Label htmlFor="team-username">Username</Label>
                     <Input 
                       id="team-username" 
                       name="username"
-                      type="email"
-                      placeholder="Enter team email"
+                      type="text"
+                      placeholder="Enter team username"
                       required 
                     />
                   </div>

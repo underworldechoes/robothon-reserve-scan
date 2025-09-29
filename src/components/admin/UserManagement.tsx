@@ -59,31 +59,19 @@ export default function UserManagement({ onStatsUpdate }: UserManagementProps) {
 
     const formData = new FormData(e.currentTarget);
     const username = formData.get("username") as string;
-    const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
     const role = formData.get("role") as "admin" | "team";
 
     try {
-      // Create auth user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-      });
+      // Create profile directly without auth user
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .insert([{
+          user_id: crypto.randomUUID(), // Generate a random UUID for user_id
+          username,
+          role,
+        }]);
 
-      if (authError) throw authError;
-
-      if (authData.user) {
-        // Create profile
-        const { error: profileError } = await supabase
-          .from("profiles")
-          .insert([{
-            user_id: authData.user.id,
-            username,
-            role,
-          }]);
-
-        if (profileError) throw profileError;
-      }
+      if (profileError) throw profileError;
 
       toast({
         title: "User created",
@@ -205,14 +193,6 @@ export default function UserManagement({ onStatsUpdate }: UserManagementProps) {
                     <div className="space-y-2">
                       <Label htmlFor="username">Username</Label>
                       <Input id="username" name="username" placeholder="e.g., team01" required />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="email">Email</Label>
-                      <Input id="email" name="email" type="email" placeholder="team01@robothon.com" required />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="password">Password</Label>
-                      <Input id="password" name="password" type="password" placeholder="Secure password" required />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="role">Role</Label>
