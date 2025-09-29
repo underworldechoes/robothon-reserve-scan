@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,9 +7,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Package, Users, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import type { Session, User } from "@supabase/supabase-js";
 
 interface LoginProps {
-  onLogin: (role: "team" | "admin", credentials: any) => void;
+  onLogin: (role: "team" | "admin", session: Session, profile: any) => void;
 }
 
 export default function Login({ onLogin }: LoginProps) {
@@ -25,45 +26,68 @@ export default function Login({ onLogin }: LoginProps) {
     const password = formData.get("password") as string;
 
     try {
-      // For admin login, use hardcoded credentials
       if (role === "admin" && username === "admin" && password === "admin123") {
-        // Create a mock session for admin
-        const adminUser = {
-          id: "admin-user-id",
-          username: "admin",
-          role: "admin"
-        };
+        // Sign in as admin user (use admin@robothon.local)
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: "admin@robothon.local",
+          password: "admin123",
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        if (!data.session) {
+          throw new Error("Failed to create session");
+        }
+
+        // Get admin profile
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("user_id", data.user.id)
+          .single();
+
+        if (profileError) {
+          throw profileError;
+        }
 
         toast({
           title: "Login successful",
           description: "Welcome Administrator!",
         });
-        onLogin(role, { user: adminUser, profile: { username: "admin", role: "admin" } });
+        onLogin("admin", data.session, profile);
       } else if (role === "team") {
-        // For team members, check against profiles table
-        const { data: profile, error } = await supabase
+        // Find team member by username
+        const { data: profile, error: profileError } = await supabase
           .from("profiles")
           .select("*")
           .eq("username", username)
           .single();
 
-        if (error || !profile) {
+        if (profileError || !profile) {
           throw new Error("Invalid username");
         }
 
-        // For demo purposes, accept any password for team members
-        // In production, you'd want proper password hashing
-        const teamUser = {
-          id: profile.user_id,
-          username: profile.username,
-          role: profile.role
-        };
+        // Sign in with constructed email (username@team.local)
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: `${username}@team.local`,
+          password: password,
+        });
+
+        if (error) {
+          throw new Error("Invalid credentials");
+        }
+
+        if (!data.session) {
+          throw new Error("Failed to create session");
+        }
 
         toast({
           title: "Login successful",
           description: `Welcome ${profile.username}!`,
         });
-        onLogin("team", { user: teamUser, profile });
+        onLogin("team", data.session, profile);
       } else {
         throw new Error("Invalid credentials");
       }
