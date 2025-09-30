@@ -223,17 +223,46 @@ const handleAddUser = async (e: React.FormEvent<HTMLFormElement>) => {
     </div>
 
     {createdCreds && (
-      <div className="rounded-md border p-3 text-sm">
-        <div className="mb-2 font-medium">Credentials created</div>
-        <div className="flex items-center justify-between">
-          <div>
-            <div>Email: {createdCreds.email}</div>
-            <div>Password: {createdCreds.password}</div>
+      <div className="rounded-md border bg-primary/5 p-4 space-y-3">
+        <div className="font-medium text-primary">✓ User Created Successfully!</div>
+        <div className="space-y-2 text-sm">
+          <div className="flex items-center justify-between p-2 rounded bg-background">
+            <div>
+              <div className="text-muted-foreground text-xs">Login Username:</div>
+              <div className="font-mono font-medium">{createdCreds.email.split('@')[0]}</div>
+            </div>
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm" 
+              onClick={() => {
+                navigator.clipboard.writeText(createdCreds.email.split('@')[0]);
+                toast({ title: "Copied!", description: "Username copied to clipboard" });
+              }}
+            >
+              Copy
+            </Button>
           </div>
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => navigator.clipboard.writeText(createdCreds.email)}>Copy email</Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => navigator.clipboard.writeText(createdCreds.password)}>Copy password</Button>
+          <div className="flex items-center justify-between p-2 rounded bg-background">
+            <div>
+              <div className="text-muted-foreground text-xs">Password:</div>
+              <div className="font-mono font-medium">{createdCreds.password}</div>
+            </div>
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm" 
+              onClick={() => {
+                navigator.clipboard.writeText(createdCreds.password);
+                toast({ title: "Copied!", description: "Password copied to clipboard" });
+              }}
+            >
+              Copy
+            </Button>
           </div>
+        </div>
+        <div className="text-xs text-muted-foreground bg-muted p-2 rounded">
+          <strong>Important:</strong> Share these credentials with the team member. They should use the <strong>username</strong> (not email) to login.
         </div>
       </div>
     )}

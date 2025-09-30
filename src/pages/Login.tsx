@@ -153,9 +153,10 @@ export default function Login({ onLogin }: LoginProps) {
                       id="team-username" 
                       name="username"
                       type="text"
-                      placeholder="Enter team username"
+                      placeholder="Enter your username"
                       required 
                     />
+                    <p className="text-xs text-muted-foreground">Use your username, not your email address</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="team-password">Password</Label>
