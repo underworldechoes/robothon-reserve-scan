@@ -157,6 +157,10 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: Database["public"]["Enums"]["user_role"]
       }
+      transaction_decrement_and_track: {
+        Args: { p_part_id: number; p_team_profile_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       user_role: "admin" | "team"

@@ -16,7 +16,7 @@ interface InventoryRecord {
   id: string;
   part_id: number;
   team_user_id: string;
-  status: "issued" | "returned";
+  status: "issued" | "returned" | "checked_out";
   scanned_at: string;
   notes: string;
   parts: {
@@ -56,7 +56,7 @@ export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingPr
   const [isScanDialogOpen, setIsScanDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "issued" | "returned">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "issued" | "returned" | "checked_out">("all");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -184,13 +184,21 @@ export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingPr
   });
 
   const getStatusBadgeVariant = (status: string) => {
-    return status === "issued" ? "default" : "secondary";
+    if (status === "issued" || status === "checked_out") return "default";
+    return "secondary";
   };
 
   const getStatusIcon = (status: string) => {
-    return status === "issued" ? 
-      <ArrowDownCircle className="h-4 w-4" /> : 
-      <ArrowUpCircle className="h-4 w-4" />;
+    if (status === "issued" || status === "checked_out") {
+      return <ArrowDownCircle className="h-4 w-4" />;
+    }
+    return <ArrowUpCircle className="h-4 w-4" />;
+  };
+
+  const getStatusLabel = (status: string) => {
+    if (status === "checked_out") return "Checked Out";
+    if (status === "issued") return "Issued";
+    return "Returned";
   };
 
   return (
@@ -325,8 +333,9 @@ export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingPr
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="issued">Issued Only</SelectItem>
-                <SelectItem value="returned">Returned Only</SelectItem>
+                <SelectItem value="checked_out">Checked Out</SelectItem>
+                <SelectItem value="issued">Issued</SelectItem>
+                <SelectItem value="returned">Returned</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -357,7 +366,7 @@ export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingPr
                     <TableCell>
                       <Badge variant={getStatusBadgeVariant(record.status)} className="flex items-center gap-1 w-fit">
                         {getStatusIcon(record.status)}
-                        {record.status === "issued" ? "Issued" : "Returned"}
+                        {getStatusLabel(record.status)}
                       </Badge>
                     </TableCell>
                     <TableCell>{new Date(record.scanned_at).toLocaleString()}</TableCell>
