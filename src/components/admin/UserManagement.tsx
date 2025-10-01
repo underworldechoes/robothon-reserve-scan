@@ -29,7 +29,7 @@ export default function UserManagement({ onStatsUpdate }: UserManagementProps) {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 const [isLoading, setIsLoading] = useState(false);
-const [createdCreds, setCreatedCreds] = useState<{ email: string; password: string } | null>(null);
+const [createdCreds, setCreatedCreds] = useState<{ username: string; password: string } | null>(null);
 const { toast } = useToast();
 
   useEffect(() => {
@@ -68,22 +68,13 @@ const handleAddUser = async (e: React.FormEvent<HTMLFormElement>) => {
     if (username.length < 3) throw new Error("Username must be at least 3 characters");
     if (password.length < 6) throw new Error("Password must be at least 6 characters");
 
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("Not authenticated");
-
-    const res = await fetch("https://aqtggtwyazowfadrbljb.supabase.co/functions/v1/admin-create-user", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ username, password, role }),
+    const { data, error } = await supabase.functions.invoke("admin-create-user", {
+      body: { username, password, role },
     });
 
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || "Failed to create user");
+    if (error) throw new Error((error as any).message || "Failed to create user");
 
-    setCreatedCreds({ email: json.email, password });
+    setCreatedCreds({ username: (data as any)?.username ?? username, password });
 
     toast({
       title: "User created",
@@ -229,14 +220,14 @@ const handleAddUser = async (e: React.FormEvent<HTMLFormElement>) => {
           <div className="flex items-center justify-between p-2 rounded bg-background">
             <div>
               <div className="text-muted-foreground text-xs">Login Username:</div>
-              <div className="font-mono font-medium">{createdCreds.email.split('@')[0]}</div>
+              <div className="font-mono font-medium">{createdCreds.username}</div>
             </div>
             <Button 
               type="button" 
               variant="outline" 
               size="sm" 
               onClick={() => {
-                navigator.clipboard.writeText(createdCreds.email.split('@')[0]);
+                navigator.clipboard.writeText(createdCreds.username);
                 toast({ title: "Copied!", description: "Username copied to clipboard" });
               }}
             >

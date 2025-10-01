@@ -66,29 +66,31 @@ export default function Login({ onLogin }: LoginProps) {
         });
         onLogin("admin", data.session, profile);
       } else if (role === "team") {
-        // Find team member by username
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("username", username)
-          .single();
+        // Construct email from username and sign in
+        const email = `${username}@team.local`;
 
-        if (profileError || !profile) {
-          throw new Error("Invalid username");
-        }
-
-        // Sign in with constructed email (username@team.local)
         const { data, error } = await supabase.auth.signInWithPassword({
-          email: `${username}@team.local`,
-          password: password,
+          email,
+          password,
         });
 
         if (error) {
           throw new Error("Invalid credentials");
         }
 
-        if (!data.session) {
+        if (!data.session || !data.user) {
           throw new Error("Failed to create session");
+        }
+
+        // Fetch profile after login
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("user_id", data.user.id)
+          .maybeSingle();
+
+        if (profileError || !profile) {
+          throw new Error("Profile not found for this user");
         }
 
         toast({
