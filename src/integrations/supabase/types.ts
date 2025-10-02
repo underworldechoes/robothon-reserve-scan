@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       categories: {
         Row: {
+          checkout_limit: number | null
           created_at: string
           description: string | null
           id: number
@@ -23,6 +24,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          checkout_limit?: number | null
           created_at?: string
           description?: string | null
           id?: number
@@ -30,6 +32,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          checkout_limit?: number | null
           created_at?: string
           description?: string | null
           id?: number

@@ -1,5 +1,5 @@
 // checkout-item edge function
-// Authenticated team user reserves an item (decrement part quantity and insert inventory_tracking)
+// Authenticated team user reserves item(s) - supports both single and bulk checkout
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -23,10 +23,10 @@ export async function serve(req: Request): Promise<Response> {
 
     const authHeader = req.headers.get("Authorization") || "";
     const jwt = authHeader.replace("Bearer ", "");
-    if (!jwt) return new Response(JSON.stringify({ error: "Missing Authorization" }), { status: 401 });
+    if (!jwt) return new Response(JSON.stringify({ error: "Missing Authorization" }), { status: 401, headers: corsHeaders });
 
     const { data: userData, error: userErr } = await adminClient.auth.getUser(jwt);
-    if (userErr || !userData.user) return new Response(JSON.stringify({ error: "Invalid token" }), { status: 401 });
+    if (userErr || !userData.user) return new Response(JSON.stringify({ error: "Invalid token" }), { status: 401, headers: corsHeaders });
 
     // Get profile id for the user
     const { data: prof, error: profErr } = await adminClient
@@ -34,32 +34,82 @@ export async function serve(req: Request): Promise<Response> {
       .select("id, role")
       .eq("user_id", userData.user.id)
       .maybeSingle();
-    if (profErr || !prof) return new Response(JSON.stringify({ error: "Profile not found" }), { status: 400 });
+    if (profErr || !prof) return new Response(JSON.stringify({ error: "Profile not found" }), { status: 400, headers: corsHeaders });
 
     const body = await req.json();
-    const part_id = Number(body.part_id);
-    if (!part_id) return new Response(JSON.stringify({ error: "Invalid part_id" }), { status: 400 });
+    
+    // Support both single item (legacy) and bulk checkout
+    const items = body.items || [{ part_id: Number(body.part_id), quantity: 1 }];
+    
+    console.log('Processing checkout for items:', items);
 
-    // Fetch part
-    const { data: part, error: partErr } = await adminClient
-      .from("parts")
-      .select("id, quantity")
-      .eq("id", part_id)
-      .maybeSingle();
-    if (partErr || !part) return new Response(JSON.stringify({ error: "Part not found" }), { status: 404 });
+    // Process each item
+    for (const item of items) {
+      const part_id = Number(item.part_id);
+      const quantity = Number(item.quantity) || 1;
+      
+      if (!part_id || quantity <= 0) {
+        return new Response(
+          JSON.stringify({ error: `Invalid part_id or quantity` }), 
+          { status: 400, headers: corsHeaders }
+        );
+      }
 
-    if (part.quantity <= 0) return new Response(JSON.stringify({ error: "Out of stock" }), { status: 400 });
+      // Fetch part to verify stock
+      const { data: part, error: partErr } = await adminClient
+        .from("parts")
+        .select("id, name, quantity")
+        .eq("id", part_id)
+        .maybeSingle();
+        
+      if (partErr || !part) {
+        return new Response(
+          JSON.stringify({ error: `Part ${part_id} not found` }), 
+          { status: 404, headers: corsHeaders }
+        );
+      }
 
-    // Decrement quantity and insert tracking in a transaction (using RPC)
-    const { error: updateErr } = await adminClient.rpc("transaction_decrement_and_track", {
-      p_part_id: part_id,
-      p_team_profile_id: prof.id,
-    });
+      if (part.quantity < quantity) {
+        return new Response(
+          JSON.stringify({ 
+            error: `Insufficient stock for ${part.name}. Available: ${part.quantity}, Requested: ${quantity}` 
+          }), 
+          { status: 400, headers: corsHeaders }
+        );
+      }
 
-    if (updateErr) throw updateErr;
+      console.log(`Checking out ${quantity}x ${part.name} (Part ID: ${part_id})`);
 
-    return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      // Process each unit (the RPC handles one at a time)
+      for (let i = 0; i < quantity; i++) {
+        const { error: updateErr } = await adminClient.rpc("transaction_decrement_and_track", {
+          p_part_id: part_id,
+          p_team_profile_id: prof.id,
+        });
+
+        if (updateErr) {
+          console.error('Checkout error:', updateErr);
+          return new Response(
+            JSON.stringify({ error: `Failed to checkout ${part.name}: ${updateErr.message}` }), 
+            { status: 500, headers: corsHeaders }
+          );
+        }
+      }
+    }
+
+    const totalItems = items.reduce((sum: number, item: any) => sum + (Number(item.quantity) || 1), 0);
+    console.log('All items checked out successfully. Total:', totalItems);
+
+    return new Response(
+      JSON.stringify({ 
+        success: true,
+        message: 'Items checked out successfully',
+        items_count: totalItems
+      }), 
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   } catch (e:any) {
+    console.error('Error in checkout-item:', e);
     return new Response(JSON.stringify({ error: e.message || "Unknown error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

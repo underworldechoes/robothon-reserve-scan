@@ -57,7 +57,6 @@ const { toast } = useToast();
 const handleAddUser = async (e: React.FormEvent<HTMLFormElement>) => {
   e.preventDefault();
   setIsLoading(true);
-  setCreatedCreds(null);
 
   const formData = new FormData(e.currentTarget);
   const username = (formData.get("username") as string).trim();
@@ -260,12 +259,21 @@ const handleAddUser = async (e: React.FormEvent<HTMLFormElement>) => {
     )}
   </div>
   <DialogFooter className="mt-6">
-    <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+    <Button 
+      type="button" 
+      variant="outline" 
+      onClick={() => {
+        setIsAddDialogOpen(false);
+        setCreatedCreds(null);
+      }}
+    >
       Close
     </Button>
-    <Button type="submit" disabled={isLoading}>
-      {isLoading ? "Creating..." : "Create User"}
-    </Button>
+    {!createdCreds && (
+      <Button type="submit" disabled={isLoading}>
+        {isLoading ? "Creating..." : "Create User"}
+      </Button>
+    )}
   </DialogFooter>
 </form>
               </DialogContent>

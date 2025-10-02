@@ -15,6 +15,7 @@ interface Category {
   id: number;
   name: string;
   description: string;
+  checkout_limit: number;
   created_at: string;
 }
 
@@ -60,11 +61,12 @@ export default function CategoryManagement({ onStatsUpdate }: CategoryManagement
     const formData = new FormData(e.currentTarget);
     const name = formData.get("name") as string;
     const description = formData.get("description") as string;
+    const checkoutLimit = parseInt(formData.get("checkout_limit") as string) || 10;
 
     try {
       const { error } = await supabase
         .from("categories")
-        .insert([{ name, description }]);
+        .insert([{ name, description, checkout_limit: checkoutLimit }]);
 
       if (error) throw error;
 
@@ -96,11 +98,12 @@ export default function CategoryManagement({ onStatsUpdate }: CategoryManagement
     const formData = new FormData(e.currentTarget);
     const name = formData.get("name") as string;
     const description = formData.get("description") as string;
+    const checkoutLimit = parseInt(formData.get("checkout_limit") as string) || 10;
 
     try {
       const { error } = await supabase
         .from("categories")
-        .update({ name, description })
+        .update({ name, description, checkout_limit: checkoutLimit })
         .eq("id", selectedCategory.id);
 
       if (error) throw error;
@@ -189,6 +192,19 @@ export default function CategoryManagement({ onStatsUpdate }: CategoryManagement
                     <div className="space-y-2">
                       <Label htmlFor="description">Description</Label>
                       <Textarea id="description" name="description" placeholder="Brief description of this category" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="checkout_limit">Checkout Limit</Label>
+                      <Input 
+                        id="checkout_limit" 
+                        name="checkout_limit" 
+                        type="number" 
+                        min="1"
+                        defaultValue="10"
+                        placeholder="Max items per checkout" 
+                        required 
+                      />
+                      <p className="text-xs text-muted-foreground">Maximum number of items a user can checkout from this category at once</p>
                     </div>
                   </div>
                   <DialogFooter className="mt-6">
@@ -289,6 +305,18 @@ export default function CategoryManagement({ onStatsUpdate }: CategoryManagement
                     name="description" 
                     defaultValue={selectedCategory.description || ""}
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-checkout_limit">Checkout Limit</Label>
+                  <Input 
+                    id="edit-checkout_limit" 
+                    name="checkout_limit" 
+                    type="number"
+                    min="1"
+                    defaultValue={selectedCategory.checkout_limit || 10}
+                    required 
+                  />
+                  <p className="text-xs text-muted-foreground">Maximum number of items a user can checkout from this category at once</p>
                 </div>
               </div>
               <DialogFooter className="mt-6">
