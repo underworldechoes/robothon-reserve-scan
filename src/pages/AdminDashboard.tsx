@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import CategoryManagement from "@/components/admin/CategoryManagement";
 import UserManagement from "@/components/admin/UserManagement";
 import InventoryTracking from "@/components/admin/InventoryTracking";
+import UserReservations from "@/components/admin/UserReservations";
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -135,7 +136,7 @@ export default function AdminDashboard({ onLogout, userData }: AdminDashboardPro
 
         {/* Main Content */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="categories" className="flex items-center gap-2">
               <Package className="h-4 w-4" />
               Categories
@@ -143,6 +144,10 @@ export default function AdminDashboard({ onLogout, userData }: AdminDashboardPro
             <TabsTrigger value="users" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               Users
+            </TabsTrigger>
+            <TabsTrigger value="reservations" className="flex items-center gap-2">
+              <ScanLine className="h-4 w-4" />
+              Reservations
             </TabsTrigger>
             <TabsTrigger value="inventory" className="flex items-center gap-2">
               <ScanLine className="h-4 w-4" />
@@ -160,6 +165,10 @@ export default function AdminDashboard({ onLogout, userData }: AdminDashboardPro
 
           <TabsContent value="users" className="space-y-6">
             <UserManagement onStatsUpdate={loadStats} />
+          </TabsContent>
+
+          <TabsContent value="reservations" className="space-y-6">
+            <UserReservations />
           </TabsContent>
 
           <TabsContent value="inventory" className="space-y-6">

@@ -73,8 +73,9 @@ const handleAddUser = async (e: React.FormEvent<HTMLFormElement>) => {
     });
 
     if (error) throw new Error((error as any).message || "Failed to create user");
-
-    setCreatedCreds({ username: (data as any)?.username ?? username, password });
+    
+    // Set credentials to display
+    setCreatedCreds({ username, password });
 
     toast({
       title: "User created",
