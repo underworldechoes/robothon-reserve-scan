@@ -33,8 +33,10 @@ interface InventoryRecord {
 interface Part {
   id: number;
   name: string;
-  category_id: number;
-  categories: {
+  quantity: number;
+  barcode?: string | null;
+  category_id?: number;
+  categories?: {
     name: string;
   };
 }
@@ -50,10 +52,14 @@ interface InventoryTrackingProps {
 
 export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingProps) {
   const [records, setRecords] = useState<InventoryRecord[]>([]);
+  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
   const [parts, setParts] = useState<Part[]>([]);
   const [teamUsers, setTeamUsers] = useState<TeamUser[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [barcode, setBarcode] = useState("");
+  const [manualPartName, setManualPartName] = useState("");
+  const [manualQuantity, setManualQuantity] = useState("1");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isScanDialogOpen, setIsScanDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "issued" | "returned" | "checked_out">("all");
@@ -61,9 +67,16 @@ export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingPr
 
   useEffect(() => {
     loadRecords();
-    loadParts();
+    loadCategories();
+    loadAllParts();
     loadTeamUsers();
   }, []);
+
+  useEffect(() => {
+    if (selectedCategoryId) {
+      loadPartsInCategory(selectedCategoryId);
+    }
+  }, [selectedCategoryId]);
 
   const loadRecords = async () => {
     try {
@@ -90,16 +103,46 @@ export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingPr
     }
   };
 
-  const loadParts = async () => {
+  const loadCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("categories")
+        .select("id, name")
+        .order("name");
+
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error: any) {
+      console.error("Error loading categories:", error);
+    }
+  };
+
+  const loadAllParts = async () => {
     try {
       const { data, error } = await supabase
         .from("parts")
         .select(`
           id,
           name,
+          quantity,
           category_id,
           categories (name)
         `)
+        .order("name");
+
+      if (error) throw error;
+      setParts(data || []);
+    } catch (error: any) {
+      console.error("Error loading parts:", error);
+    }
+  };
+
+  const loadPartsInCategory = async (categoryId: number) => {
+    try {
+      const { data, error } = await supabase
+        .from("parts")
+        .select("id, name, quantity, barcode")
+        .eq("category_id", categoryId)
         .order("name");
 
       if (error) throw error;
@@ -121,6 +164,95 @@ export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingPr
       setTeamUsers(data || []);
     } catch (error: any) {
       console.error("Error loading team users:", error);
+    }
+  };
+
+  const handleBarcodeInput = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!barcode.trim() || !selectedCategoryId) return;
+
+    setIsLoading(true);
+    try {
+      const { data: existingPart, error: searchError } = await supabase
+        .from("parts")
+        .select("*")
+        .eq("barcode", barcode.trim())
+        .eq("category_id", selectedCategoryId)
+        .maybeSingle();
+
+      if (searchError) throw searchError;
+
+      if (existingPart) {
+        const { error: updateError } = await supabase
+          .from("parts")
+          .update({ quantity: existingPart.quantity + 1 })
+          .eq("id", existingPart.id);
+
+        if (updateError) throw updateError;
+
+        toast({
+          title: "Part scanned",
+          description: `Added 1x ${existingPart.name}. New quantity: ${existingPart.quantity + 1}`,
+        });
+      } else {
+        toast({
+          title: "Barcode not found",
+          description: "Please create this part manually first.",
+          variant: "destructive",
+        });
+      }
+
+      setBarcode("");
+      if (selectedCategoryId) loadPartsInCategory(selectedCategoryId);
+      onStatsUpdate();
+    } catch (error: any) {
+      toast({
+        title: "Error scanning barcode",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleManualAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualPartName.trim() || !selectedCategoryId) return;
+
+    setIsLoading(true);
+    try {
+      const qty = parseInt(manualQuantity) || 1;
+
+      const { error } = await supabase
+        .from("parts")
+        .insert([{
+          name: manualPartName.trim(),
+          category_id: selectedCategoryId,
+          quantity: qty,
+          barcode: barcode.trim() || null,
+        }]);
+
+      if (error) throw error;
+
+      toast({
+        title: "Part added",
+        description: `${manualPartName} (${qty}x) added to inventory.`,
+      });
+
+      setManualPartName("");
+      setManualQuantity("1");
+      setBarcode("");
+      if (selectedCategoryId) loadPartsInCategory(selectedCategoryId);
+      onStatsUpdate();
+    } catch (error: any) {
+      toast({
+        title: "Error adding part",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -165,13 +297,6 @@ export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingPr
     }
   };
 
-  const handleBarcodeScanner = () => {
-    toast({
-      title: "Barcode Scanner",
-      description: "Barcode scanning functionality would be integrated here with a camera library.",
-    });
-  };
-
   const filteredRecords = records.filter(record => {
     const matchesSearch = searchTerm === "" || 
       record.parts.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -203,118 +328,226 @@ export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingPr
 
   return (
     <div className="space-y-6">
+      {/* Barcode & Manual Entry */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Inventory Management</CardTitle>
+          <CardDescription>Scan barcodes or manually add items to categories</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Label>Select Category</Label>
+            <Select
+              value={selectedCategoryId?.toString() || ""}
+              onValueChange={(value) => setSelectedCategoryId(parseInt(value))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Choose a category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.id.toString()}>
+                    {cat.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {selectedCategoryId && (
+            <>
+              <Card className="bg-muted/50">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <ScanLine className="h-5 w-5" />
+                    Scan Barcode
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleBarcodeInput} className="flex gap-2">
+                    <Input
+                      placeholder="Scan or enter barcode..."
+                      value={barcode}
+                      onChange={(e) => setBarcode(e.target.value)}
+                      disabled={isLoading}
+                    />
+                    <Button type="submit" disabled={isLoading || !barcode.trim()}>
+                      {isLoading ? "Scanning..." : "Scan"}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-muted/50">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Plus className="h-5 w-5" />
+                    Manual Entry
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleManualAdd} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="partName">Part Name</Label>
+                        <Input
+                          id="partName"
+                          placeholder="Enter part name..."
+                          value={manualPartName}
+                          onChange={(e) => setManualPartName(e.target.value)}
+                          disabled={isLoading}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="quantity">Quantity</Label>
+                        <Input
+                          id="quantity"
+                          type="number"
+                          min="1"
+                          placeholder="1"
+                          value={manualQuantity}
+                          onChange={(e) => setManualQuantity(e.target.value)}
+                          disabled={isLoading}
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="barcodeOptional">Barcode (Optional)</Label>
+                      <Input
+                        id="barcodeOptional"
+                        placeholder="Enter or scan barcode..."
+                        value={barcode}
+                        onChange={(e) => setBarcode(e.target.value)}
+                        disabled={isLoading}
+                      />
+                    </div>
+                    <Button type="submit" disabled={isLoading || !manualPartName.trim()} className="w-full">
+                      {isLoading ? "Adding..." : "Add to Inventory"}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+
+              <div className="space-y-2">
+                <h3 className="font-semibold">Current Inventory</h3>
+                {parts.length === 0 ? (
+                  <div className="text-center py-8 border rounded-lg bg-muted/30">
+                    <ScanLine className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                    <p className="text-muted-foreground">No parts in this category yet</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Part Name</TableHead>
+                        <TableHead>Barcode</TableHead>
+                        <TableHead className="text-right">Quantity</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {parts.map((part) => (
+                        <TableRow key={part.id}>
+                          <TableCell className="font-medium">{part.name}</TableCell>
+                          <TableCell>
+                            <code className="text-xs">{part.barcode || "—"}</code>
+                          </TableCell>
+                          <TableCell className="text-right">{part.quantity}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Activity Log */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Inventory Tracking</CardTitle>
-              <CardDescription>Track component issues and returns with barcode scanning</CardDescription>
+              <CardTitle>Activity Log</CardTitle>
+              <CardDescription>Track component issues and returns</CardDescription>
             </div>
-            <div className="flex gap-2">
-              <Dialog open={isScanDialogOpen} onOpenChange={setIsScanDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <ScanLine className="h-4 w-4 mr-2" />
-                    Scan Barcode
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Barcode Scanner</DialogTitle>
-                    <DialogDescription>Scan component barcodes to track inventory</DialogDescription>
-                  </DialogHeader>
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Record Transaction
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Manual Transaction Entry</DialogTitle>
+                  <DialogDescription>Record component issue or return</DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleManualEntry}>
                   <div className="space-y-4">
-                    <div className="bg-muted rounded-lg p-8 text-center">
-                      <ScanLine className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-                      <p className="text-muted-foreground">Camera scanner interface would appear here</p>
-                      <p className="text-sm text-muted-foreground mt-2">Integration with camera library needed</p>
+                    <div className="space-y-2">
+                      <Label htmlFor="part_id">Component</Label>
+                      <Select name="part_id" required>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select component" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {parts.filter(p => p.categories).map((part) => (
+                            <SelectItem key={part.id} value={part.id.toString()}>
+                              {part.categories?.name} - {part.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                    <Button 
-                      className="w-full" 
-                      onClick={handleBarcodeScanner}
-                    >
-                      Start Scanning
-                    </Button>
+                    <div className="space-y-2">
+                      <Label htmlFor="team_user_id">Team Member</Label>
+                      <Select name="team_user_id" required>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select team member" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {teamUsers.map((user) => (
+                            <SelectItem key={user.id} value={user.id}>
+                              {user.username}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="status">Action</Label>
+                      <Select name="status" required>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select action" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="issued">Issue Component</SelectItem>
+                          <SelectItem value="returned">Return Component</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="notes">Notes (optional)</Label>
+                      <Textarea id="notes" name="notes" placeholder="Additional notes" />
+                    </div>
                   </div>
-                </DialogContent>
-              </Dialog>
-              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Manual Entry
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Manual Inventory Entry</DialogTitle>
-                    <DialogDescription>Manually record component issue or return</DialogDescription>
-                  </DialogHeader>
-                  <form onSubmit={handleManualEntry}>
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="part_id">Component</Label>
-                        <Select name="part_id" required>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select component" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {parts.map((part) => (
-                              <SelectItem key={part.id} value={part.id.toString()}>
-                                {part.categories.name} - {part.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="team_user_id">Team Member</Label>
-                        <Select name="team_user_id" required>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select team member" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {teamUsers.map((user) => (
-                              <SelectItem key={user.id} value={user.id}>
-                                {user.username}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="status">Action</Label>
-                        <Select name="status" required>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select action" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="issued">Issue Component</SelectItem>
-                            <SelectItem value="returned">Return Component</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="notes">Notes (optional)</Label>
-                        <Textarea id="notes" name="notes" placeholder="Additional notes about this transaction" />
-                      </div>
-                    </div>
-                    <DialogFooter className="mt-6">
-                      <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button type="submit" disabled={isLoading}>
-                        {isLoading ? "Recording..." : "Record Entry"}
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
-            </div>
+                  <DialogFooter className="mt-6">
+                    <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={isLoading}>
+                      {isLoading ? "Recording..." : "Record Entry"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
           </div>
         </CardHeader>
         <CardContent>
-          {/* Filters */}
           <div className="flex gap-4 mb-6">
             <div className="flex-1">
               <div className="relative">
@@ -327,7 +560,7 @@ export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingPr
                 />
               </div>
             </div>
-            <Select value={statusFilter} onValueChange={(value: "all" | "issued" | "returned") => setStatusFilter(value)}>
+            <Select value={statusFilter} onValueChange={(value: any) => setStatusFilter(value)}>
               <SelectTrigger className="w-48">
                 <SelectValue />
               </SelectTrigger>
@@ -343,7 +576,7 @@ export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingPr
           {filteredRecords.length === 0 ? (
             <div className="text-center py-8">
               <ScanLine className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">No inventory records yet. Start tracking by scanning barcodes or manual entry.</p>
+              <p className="text-muted-foreground">No inventory records yet.</p>
             </div>
           ) : (
             <Table>

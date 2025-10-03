@@ -28,9 +28,9 @@ export default function UserManagement({ onStatsUpdate }: UserManagementProps) {
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-const [isLoading, setIsLoading] = useState(false);
-const [createdCreds, setCreatedCreds] = useState<{ username: string; password: string } | null>(null);
-const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [createdCreds, setCreatedCreds] = useState<{ username: string; password: string } | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     loadUsers();
@@ -293,6 +293,7 @@ const handleAddUser = async (e: React.FormEvent<HTMLFormElement>) => {
                   <TableHead>Username</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Created</TableHead>
+                  <TableHead>Password</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -306,6 +307,9 @@ const handleAddUser = async (e: React.FormEvent<HTMLFormElement>) => {
                       </Badge>
                     </TableCell>
                     <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
+                    <TableCell>
+                      <span className="text-xs text-muted-foreground">Only shown at creation</span>
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
                         <Button
