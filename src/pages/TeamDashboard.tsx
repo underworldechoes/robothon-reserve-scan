@@ -25,6 +25,7 @@ interface Reservation {
   status: string;
   scanned_at: string;
   notes: string | null;
+  admin_remarks: string | null;
   parts: {
     name: string;
     categories: {
@@ -108,6 +109,7 @@ export default function TeamDashboard({ onLogout, onSelectCategory }: TeamDashbo
           status,
           scanned_at,
           notes,
+          admin_remarks,
           parts (
             name,
             categories (
@@ -218,11 +220,14 @@ export default function TeamDashboard({ onLogout, onSelectCategory }: TeamDashbo
                         {reservation.notes && (
                           <p className="text-sm text-muted-foreground">Note: {reservation.notes}</p>
                         )}
+                        {reservation.admin_remarks && (
+                          <p className="text-sm text-muted-foreground font-medium">Admin Remarks: {reservation.admin_remarks}</p>
+                        )}
                       </div>
                       <div className="flex items-center gap-3">
-                        <StatusBadge variant="reserved">
+                        <StatusBadge variant={reservation.status === "reserved" ? "reserved" : reservation.status === "issued" ? "default" : "available"}>
                           <CheckCircle2 className="h-3 w-3 mr-1" />
-                          Checked Out
+                          {reservation.status.charAt(0).toUpperCase() + reservation.status.slice(1)}
                         </StatusBadge>
                       </div>
                     </div>

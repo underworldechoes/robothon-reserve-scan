@@ -18,6 +18,7 @@ interface Reservation {
   scanned_at: string;
   status: string;
   notes: string | null;
+  admin_remarks: string | null;
   parts: {
     name: string;
     description: string | null;
@@ -74,6 +75,7 @@ export default function UserReservations() {
           scanned_at,
           status,
           notes,
+          admin_remarks,
           parts (
             name,
             description
@@ -97,12 +99,16 @@ export default function UserReservations() {
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
-      case "checked_out":
-        return "destructive";
-      case "issued":
+      case "reserved":
         return "default";
+      case "issued":
+        return "destructive";
       case "returned":
         return "secondary";
+      case "lost":
+        return "destructive";
+      case "damaged":
+        return "destructive";
       default:
         return "outline";
     }
@@ -160,6 +166,7 @@ export default function UserReservations() {
                 <TableHead>Status</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Notes</TableHead>
+                <TableHead>Admin Remarks</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -176,6 +183,7 @@ export default function UserReservations() {
                   </TableCell>
                   <TableCell>{new Date(reservation.scanned_at).toLocaleString()}</TableCell>
                   <TableCell className="text-muted-foreground">{reservation.notes || "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">{reservation.admin_remarks || "—"}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

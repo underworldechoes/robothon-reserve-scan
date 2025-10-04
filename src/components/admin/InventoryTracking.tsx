@@ -16,9 +16,10 @@ interface InventoryRecord {
   id: string;
   part_id: number;
   team_user_id: string;
-  status: "issued" | "returned" | "checked_out";
+  status: "reserved" | "issued" | "returned" | "lost" | "damaged";
   scanned_at: string;
   notes: string;
+  admin_remarks: string | null;
   parts: {
     name: string;
     categories: {
@@ -62,7 +63,10 @@ export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingPr
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "issued" | "returned" | "checked_out">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "reserved" | "issued" | "returned">("all");
+  const [editingRecord, setEditingRecord] = useState<string | null>(null);
+  const [editStatus, setEditStatus] = useState<string>("");
+  const [editRemarks, setEditRemarks] = useState<string>("");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -83,7 +87,13 @@ export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingPr
       const { data, error } = await supabase
         .from("inventory_tracking")
         .select(`
-          *,
+          id,
+          part_id,
+          team_user_id,
+          status,
+          scanned_at,
+          notes,
+          admin_remarks,
           parts (
             name,
             categories (name)
@@ -308,22 +318,57 @@ export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingPr
     return matchesSearch && matchesStatus;
   });
 
+  const handleUpdateRecord = async (recordId: string) => {
+    try {
+      const { error } = await supabase
+        .from("inventory_tracking")
+        .update({
+          status: editStatus,
+          admin_remarks: editRemarks,
+        })
+        .eq("id", recordId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Record updated successfully",
+      });
+
+      setEditingRecord(null);
+      loadRecords();
+      onStatsUpdate();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const startEditing = (record: InventoryRecord) => {
+    setEditingRecord(record.id);
+    setEditStatus(record.status);
+    setEditRemarks(record.admin_remarks || "");
+  };
+
   const getStatusBadgeVariant = (status: string) => {
-    if (status === "issued" || status === "checked_out") return "default";
-    return "secondary";
+    if (status === "reserved") return "default";
+    if (status === "issued") return "destructive";
+    if (status === "returned") return "secondary";
+    return "destructive";
   };
 
   const getStatusIcon = (status: string) => {
-    if (status === "issued" || status === "checked_out") {
+    if (status === "issued" || status === "reserved") {
       return <ArrowDownCircle className="h-4 w-4" />;
     }
     return <ArrowUpCircle className="h-4 w-4" />;
   };
 
   const getStatusLabel = (status: string) => {
-    if (status === "checked_out") return "Checked Out";
-    if (status === "issued") return "Issued";
-    return "Returned";
+    return status.charAt(0).toUpperCase() + status.slice(1);
   };
 
   return (
@@ -524,6 +569,7 @@ export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingPr
                           <SelectValue placeholder="Select action" />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="reserved">Reserve Component</SelectItem>
                           <SelectItem value="issued">Issue Component</SelectItem>
                           <SelectItem value="returned">Return Component</SelectItem>
                         </SelectContent>
@@ -566,9 +612,11 @@ export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingPr
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="checked_out">Checked Out</SelectItem>
+                <SelectItem value="reserved">Reserved</SelectItem>
                 <SelectItem value="issued">Issued</SelectItem>
                 <SelectItem value="returned">Returned</SelectItem>
+                <SelectItem value="lost">Lost</SelectItem>
+                <SelectItem value="damaged">Damaged</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -588,6 +636,8 @@ export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingPr
                   <TableHead>Status</TableHead>
                   <TableHead>Date/Time</TableHead>
                   <TableHead>Notes</TableHead>
+                  <TableHead>Admin Remarks</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -597,13 +647,56 @@ export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingPr
                     <TableCell>{record.parts.categories.name}</TableCell>
                     <TableCell>{record.profiles.username}</TableCell>
                     <TableCell>
-                      <Badge variant={getStatusBadgeVariant(record.status)} className="flex items-center gap-1 w-fit">
-                        {getStatusIcon(record.status)}
-                        {getStatusLabel(record.status)}
-                      </Badge>
+                      {editingRecord === record.id ? (
+                        <Select value={editStatus} onValueChange={setEditStatus}>
+                          <SelectTrigger className="w-32">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="reserved">Reserved</SelectItem>
+                            <SelectItem value="issued">Issued</SelectItem>
+                            <SelectItem value="returned">Returned</SelectItem>
+                            <SelectItem value="lost">Lost</SelectItem>
+                            <SelectItem value="damaged">Damaged</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Badge variant={getStatusBadgeVariant(record.status)} className="flex items-center gap-1 w-fit">
+                          {getStatusIcon(record.status)}
+                          {getStatusLabel(record.status)}
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell>{new Date(record.scanned_at).toLocaleString()}</TableCell>
                     <TableCell>{record.notes || "-"}</TableCell>
+                    <TableCell>
+                      {editingRecord === record.id ? (
+                        <Input
+                          value={editRemarks}
+                          onChange={(e) => setEditRemarks(e.target.value)}
+                          placeholder="Add remarks..."
+                          className="w-full"
+                        />
+                      ) : (
+                        <span className="text-muted-foreground">{record.admin_remarks || "—"}</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingRecord === record.id ? (
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => handleUpdateRecord(record.id)}>
+                            Save
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => setEditingRecord(null)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button size="sm" variant="outline" onClick={() => startEditing(record)}>
+                          Edit
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

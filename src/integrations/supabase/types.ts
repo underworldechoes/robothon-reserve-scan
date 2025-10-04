@@ -43,6 +43,7 @@ export type Database = {
       }
       inventory_tracking: {
         Row: {
+          admin_remarks: string | null
           id: string
           notes: string | null
           part_id: number
@@ -51,6 +52,7 @@ export type Database = {
           team_user_id: string
         }
         Insert: {
+          admin_remarks?: string | null
           id?: string
           notes?: string | null
           part_id: number
@@ -59,6 +61,7 @@ export type Database = {
           team_user_id: string
         }
         Update: {
+          admin_remarks?: string | null
           id?: string
           notes?: string | null
           part_id?: number
