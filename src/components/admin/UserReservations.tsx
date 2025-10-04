@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ClipboardList, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,6 +32,9 @@ export default function UserReservations() {
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [editingReservation, setEditingReservation] = useState<string | null>(null);
+  const [editStatus, setEditStatus] = useState<string>("");
+  const [editRemarks, setEditRemarks] = useState<string>("");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -95,6 +100,42 @@ export default function UserReservations() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleUpdateReservation = async (reservationId: string) => {
+    try {
+      const { error } = await supabase
+        .from("inventory_tracking")
+        .update({
+          status: editStatus,
+          admin_remarks: editRemarks,
+        })
+        .eq("id", reservationId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Reservation updated successfully",
+      });
+
+      setEditingReservation(null);
+      if (selectedUserId) {
+        loadReservations(selectedUserId);
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const startEditing = (reservation: Reservation) => {
+    setEditingReservation(reservation.id);
+    setEditStatus(reservation.status);
+    setEditRemarks(reservation.admin_remarks || "");
   };
 
   const getStatusBadgeVariant = (status: string) => {
@@ -167,6 +208,7 @@ export default function UserReservations() {
                 <TableHead>Date</TableHead>
                 <TableHead>Notes</TableHead>
                 <TableHead>Admin Remarks</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -177,13 +219,55 @@ export default function UserReservations() {
                     {reservation.parts.description || "—"}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={getStatusBadgeVariant(reservation.status)}>
-                      {reservation.status.replace("_", " ")}
-                    </Badge>
+                    {editingReservation === reservation.id ? (
+                      <Select value={editStatus} onValueChange={setEditStatus}>
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="reserved">Reserved</SelectItem>
+                          <SelectItem value="issued">Issued</SelectItem>
+                          <SelectItem value="returned">Returned</SelectItem>
+                          <SelectItem value="lost">Lost</SelectItem>
+                          <SelectItem value="damaged">Damaged</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Badge variant={getStatusBadgeVariant(reservation.status)}>
+                        {reservation.status.replace("_", " ")}
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell>{new Date(reservation.scanned_at).toLocaleString()}</TableCell>
                   <TableCell className="text-muted-foreground">{reservation.notes || "—"}</TableCell>
-                  <TableCell className="text-muted-foreground">{reservation.admin_remarks || "—"}</TableCell>
+                  <TableCell>
+                    {editingReservation === reservation.id ? (
+                      <Input
+                        value={editRemarks}
+                        onChange={(e) => setEditRemarks(e.target.value)}
+                        placeholder="Add remarks..."
+                        className="w-full"
+                      />
+                    ) : (
+                      <span className="text-muted-foreground">{reservation.admin_remarks || "—"}</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {editingReservation === reservation.id ? (
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={() => handleUpdateReservation(reservation.id)}>
+                          Save
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setEditingReservation(null)}>
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button size="sm" variant="outline" onClick={() => startEditing(reservation)}>
+                        Edit
+                      </Button>
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
