@@ -191,8 +191,7 @@ export default function Login({ onLogin }: LoginProps) {
                     <Input 
                       id="admin-username" 
                       name="username"
-                      placeholder="admin"
-                      defaultValue="admin"
+                      placeholder="Enter admin username"
                       required 
                     />
                   </div>
@@ -202,13 +201,9 @@ export default function Login({ onLogin }: LoginProps) {
                       id="admin-password" 
                       name="password"
                       type="password" 
-                      placeholder="admin123"
-                      defaultValue="admin123"
+                      placeholder="Enter password"
                       required 
                     />
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Default admin credentials: admin / admin123
                   </div>
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? "Signing in..." : "Sign in as Admin"}

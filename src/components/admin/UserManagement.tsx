@@ -133,25 +133,33 @@ const handleAddUser = async (e: React.FormEvent<HTMLFormElement>) => {
   };
 
   const handleDeleteUser = async (user: UserProfile) => {
+    // Prevent deletion of admin users
+    if (user.role === "admin") {
+      toast({
+        title: "Cannot delete admin",
+        description: "Admin users cannot be deleted for security reasons.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!confirm(`Are you sure you want to delete "${user.username}"? This action cannot be undone.`)) {
       return;
     }
 
     try {
-      // First delete the profile
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .delete()
-        .eq("id", user.id);
+      // Call the edge function to delete both auth user and profile
+      const { data, error } = await supabase.functions.invoke("admin-delete-user", {
+        body: { userId: user.user_id },
+      });
 
-      if (profileError) throw profileError;
-
-      // Note: We can't delete the auth user from the client side
-      // This would need to be done via admin API or Supabase dashboard
+      if (error) {
+        throw new Error(error.message || "Failed to delete user");
+      }
 
       toast({
         title: "User deleted",
-        description: `${user.username} has been deleted from profiles. Auth user needs manual deletion.`,
+        description: `${user.username} has been deleted successfully.`,
       });
 
       loadUsers();
@@ -326,7 +334,6 @@ const handleAddUser = async (e: React.FormEvent<HTMLFormElement>) => {
                           size="sm"
                           variant="outline"
                           onClick={() => handleDeleteUser(user)}
-                          disabled={user.role === "admin"}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
