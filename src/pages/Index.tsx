@@ -32,9 +32,11 @@ const Index = () => {
           .from("profiles")
           .select("*")
           .eq("user_id", session.user.id)
-          .single()
-          .then(({ data: profile }) => {
-            if (profile) {
+          .maybeSingle()
+          .then(({ data: profile, error }) => {
+            if (error) {
+              console.error("Error fetching profile:", error);
+            } else if (profile) {
               setAppState({
                 currentView: profile.role === "admin" ? "admin-dashboard" : "team-dashboard",
                 userRole: profile.role,
@@ -42,6 +44,8 @@ const Index = () => {
                 session,
                 profile,
               });
+            } else {
+              console.error("No profile found for user");
             }
           });
       }

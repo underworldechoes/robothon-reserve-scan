@@ -19,8 +19,12 @@ export default function Login({ onLogin }: LoginProps) {
 
   // Ensure default admin exists (idempotent)
   useEffect(() => {
-    supabase.functions.invoke("bootstrap-admin").catch(() => {
-      // ignore bootstrap errors silently
+    supabase.functions.invoke("bootstrap-admin").then(({ data, error }) => {
+      if (error) {
+        console.error("Failed to bootstrap admin:", error);
+      } else {
+        console.log("Bootstrap admin result:", data);
+      }
     });
   }, []);
 
@@ -54,10 +58,14 @@ export default function Login({ onLogin }: LoginProps) {
           .from("profiles")
           .select("*")
           .eq("user_id", data.user.id)
-          .single();
+          .maybeSingle();
 
         if (profileError) {
           throw profileError;
+        }
+
+        if (!profile) {
+          throw new Error("Admin profile not found. Please contact support.");
         }
 
         toast({
