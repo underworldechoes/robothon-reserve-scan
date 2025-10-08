@@ -50,19 +50,25 @@ export default function TeamDashboard({ onLogout, onSelectCategory }: TeamDashbo
     loadReservations();
     loadProfile();
 
-    // Set up real-time subscriptions for live updates
+    // Set up real-time subscriptions with debouncing for better performance
+    let partsTimeout: NodeJS.Timeout;
+    let reservationsTimeout: NodeJS.Timeout;
+
     const partsChannel = supabase
       .channel('parts-changes')
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'UPDATE',
           schema: 'public',
           table: 'parts'
         },
         () => {
-          console.log('Parts updated, reloading categories');
-          loadCategories();
+          clearTimeout(partsTimeout);
+          partsTimeout = setTimeout(() => {
+            console.log('Parts updated, reloading categories');
+            loadCategories();
+          }, 500);
         }
       )
       .subscribe();
@@ -77,13 +83,18 @@ export default function TeamDashboard({ onLogout, onSelectCategory }: TeamDashbo
           table: 'inventory_tracking'
         },
         () => {
-          console.log('Reservations updated, reloading');
-          loadReservations();
+          clearTimeout(reservationsTimeout);
+          reservationsTimeout = setTimeout(() => {
+            console.log('Reservations updated, reloading');
+            loadReservations();
+          }, 500);
         }
       )
       .subscribe();
 
     return () => {
+      clearTimeout(partsTimeout);
+      clearTimeout(reservationsTimeout);
       supabase.removeChannel(partsChannel);
       supabase.removeChannel(reservationsChannel);
     };

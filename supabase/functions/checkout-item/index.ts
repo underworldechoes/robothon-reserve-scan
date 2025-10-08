@@ -59,16 +59,27 @@ export async function serve(req: Request): Promise<Response> {
       // This prevents race conditions from multiple concurrent checkouts
       console.log(`Processing checkout: ${quantity}x Part ID ${part_id}`);
 
-      // Process each unit atomically
+      // Process each unit atomically with retry logic
+      let retries = 3;
       for (let i = 0; i < quantity; i++) {
-        const { error: updateErr } = await adminClient.rpc("transaction_decrement_and_track", {
-          p_part_id: part_id,
-          p_team_profile_id: prof.id,
-        });
+        let success = false;
+        let lastError = null;
 
-        if (updateErr) {
-          console.error('Checkout error:', updateErr);
-          // Check if it's a stock issue
+        while (retries > 0 && !success) {
+          const { error: updateErr } = await adminClient.rpc("transaction_decrement_and_track", {
+            p_part_id: part_id,
+            p_team_profile_id: prof.id,
+          });
+
+          if (!updateErr) {
+            success = true;
+            break;
+          }
+
+          lastError = updateErr;
+          console.error(`Checkout attempt failed (${4 - retries}/3):`, updateErr);
+
+          // Check if it's a stock issue (no retry needed)
           if (updateErr.message?.includes('quantity') || updateErr.code === '23514') {
             const { data: partInfo } = await adminClient
               .from("parts")
@@ -78,14 +89,24 @@ export async function serve(req: Request): Promise<Response> {
             
             return new Response(
               JSON.stringify({ 
-                error: `Insufficient stock${partInfo?.name ? ` for ${partInfo.name}` : ''}. Please refresh and try again.` 
+                error: `Insufficient stock${partInfo?.name ? ` for ${partInfo.name}` : ''}. Available: ${partInfo?.quantity || 0}` 
               }), 
               { status: 400, headers: corsHeaders }
             );
           }
-          
+
+          retries--;
+          if (retries > 0) {
+            // Exponential backoff: 100ms, 200ms, 400ms
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, 3 - retries) * 100));
+          }
+        }
+
+        if (!success) {
           return new Response(
-            JSON.stringify({ error: `Checkout failed: ${updateErr.message}` }), 
+            JSON.stringify({ 
+              error: `Checkout failed after retries: ${lastError?.message || 'Unknown error'}` 
+            }), 
             { status: 500, headers: corsHeaders }
           );
         }

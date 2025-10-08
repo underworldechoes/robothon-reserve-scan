@@ -5,10 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Scan } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { ScanLine, Plus, ArrowUpCircle, ArrowDownCircle, Search } from "lucide-react";
+import { ScanLine, Plus, ArrowUpCircle, ArrowDownCircle, Search, QrCode } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -67,6 +68,10 @@ export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingPr
   const [editingRecord, setEditingRecord] = useState<string | null>(null);
   const [editStatus, setEditStatus] = useState<string>("");
   const [editRemarks, setEditRemarks] = useState<string>("");
+  const [scanBarcode, setScanBarcode] = useState("");
+  const [selectedTeamUser, setSelectedTeamUser] = useState<string>("");
+  const [scanQuantity, setScanQuantity] = useState("1");
+  const [isScanDialogOpen, setIsScanDialogOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -80,6 +85,41 @@ export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingPr
     if (selectedCategoryId) {
       loadPartsInCategory(selectedCategoryId);
     }
+  }, [selectedCategoryId]);
+
+  // Real-time updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('inventory-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'inventory_tracking'
+        },
+        () => {
+          loadRecords();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'parts'
+        },
+        () => {
+          if (selectedCategoryId) {
+            loadPartsInCategory(selectedCategoryId);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [selectedCategoryId]);
 
   const loadRecords = async () => {
@@ -353,6 +393,77 @@ export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingPr
     setEditRemarks(record.admin_remarks || "");
   };
 
+  const handleScanAndReserve = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scanBarcode.trim() || !selectedTeamUser || !selectedCategoryId) return;
+
+    setIsLoading(true);
+    try {
+      // Find part by barcode
+      const { data: part, error: partError } = await supabase
+        .from("parts")
+        .select("id, name, quantity, category_id")
+        .eq("barcode", scanBarcode.trim())
+        .eq("category_id", selectedCategoryId)
+        .maybeSingle();
+
+      if (partError) throw partError;
+      
+      if (!part) {
+        toast({
+          title: "Barcode not found",
+          description: "No part found with this barcode in the selected category",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const qty = parseInt(scanQuantity) || 1;
+      
+      if (part.quantity < qty) {
+        toast({
+          title: "Insufficient stock",
+          description: `Only ${part.quantity} items available for ${part.name}`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Get user session
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      // Call checkout edge function for atomic reservation
+      const items = Array(qty).fill({ part_id: part.id, quantity: 1 });
+      
+      const { error: checkoutError } = await supabase.functions.invoke('checkout-item', {
+        body: { items }
+      });
+
+      if (checkoutError) throw checkoutError;
+
+      toast({
+        title: "Reservation successful",
+        description: `${qty}x ${part.name} reserved successfully`,
+      });
+
+      setScanBarcode("");
+      setScanQuantity("1");
+      setIsScanDialogOpen(false);
+      loadRecords();
+      if (selectedCategoryId) loadPartsInCategory(selectedCategoryId);
+      onStatsUpdate();
+    } catch (error: any) {
+      toast({
+        title: "Reservation failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const getStatusBadgeVariant = (status: string) => {
     if (status === "reserved") return "default";
     if (status === "issued") return "destructive";
@@ -418,6 +529,67 @@ export default function InventoryTracking({ onStatsUpdate }: InventoryTrackingPr
                     />
                     <Button type="submit" disabled={isLoading || !barcode.trim()}>
                       {isLoading ? "Scanning..." : "Scan"}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-muted/50">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <QrCode className="h-5 w-5" />
+                    Quick Scan & Reserve
+                  </CardTitle>
+                  <CardDescription>Scan barcode to reserve item for a team member</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleScanAndReserve} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="scanBarcode">Scan Barcode</Label>
+                      <Input
+                        id="scanBarcode"
+                        placeholder="Scan or enter barcode..."
+                        value={scanBarcode}
+                        onChange={(e) => setScanBarcode(e.target.value)}
+                        disabled={isLoading}
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="teamUser">Team Member</Label>
+                        <Select value={selectedTeamUser} onValueChange={setSelectedTeamUser} required>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select member" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {teamUsers.map((user) => (
+                              <SelectItem key={user.id} value={user.id}>
+                                {user.username}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="scanQty">Quantity</Label>
+                        <Input
+                          id="scanQty"
+                          type="number"
+                          min="1"
+                          value={scanQuantity}
+                          onChange={(e) => setScanQuantity(e.target.value)}
+                          disabled={isLoading}
+                          required
+                        />
+                      </div>
+                    </div>
+                    <Button 
+                      type="submit" 
+                      disabled={isLoading || !scanBarcode.trim() || !selectedTeamUser} 
+                      className="w-full"
+                    >
+                      {isLoading ? "Processing..." : "Scan & Reserve"}
                     </Button>
                   </form>
                 </CardContent>

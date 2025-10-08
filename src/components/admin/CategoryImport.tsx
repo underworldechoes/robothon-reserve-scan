@@ -91,7 +91,17 @@ export default function CategoryImport({ onImportComplete }: CategoryImportProps
   };
 
   const downloadTemplate = () => {
-    const template = "name,description,checkout_limit\nElectronics,Electronic components,10\nMechanical,Mechanical parts,15";
+    const template = `name,description,checkout_limit
+Electronics,Electronic components and circuits,10
+Mechanical,Mechanical parts and tools,15
+Sensors,Various sensors and detectors,8
+Motors,DC and servo motors,5
+Wires,Jumper wires and cables,20
+Microcontrollers,Arduino and Raspberry Pi boards,3
+Power Supply,Batteries and power modules,10
+Tools,Screwdrivers and pliers,5
+Chassis,Robot chassis and frames,4
+Wheels,Robot wheels and tracks,10`;
     const blob = new Blob([template], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);

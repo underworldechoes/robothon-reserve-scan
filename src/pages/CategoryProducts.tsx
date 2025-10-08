@@ -56,9 +56,10 @@ export default function CategoryProducts({ categoryId, onBack, onLogout }: Categ
   useEffect(() => {
     loadCategoryAndParts();
 
-    // Real-time updates for parts quantity
+    // Real-time updates for parts quantity with specific filter
+    let updateTimeout: NodeJS.Timeout;
     const partsChannel = supabase
-      .channel('parts-realtime')
+      .channel(`parts-realtime-${categoryId}`)
       .on(
         'postgres_changes',
         {
@@ -69,12 +70,17 @@ export default function CategoryProducts({ categoryId, onBack, onLogout }: Categ
         },
         (payload) => {
           console.log('Part quantity updated:', payload);
-          loadCategoryAndParts();
+          // Debounce updates to prevent overwhelming UI
+          clearTimeout(updateTimeout);
+          updateTimeout = setTimeout(() => {
+            loadCategoryAndParts();
+          }, 300);
         }
       )
       .subscribe();
 
     return () => {
+      clearTimeout(updateTimeout);
       supabase.removeChannel(partsChannel);
     };
   }, [categoryId]);
@@ -157,7 +163,7 @@ export default function CategoryProducts({ categoryId, onBack, onLogout }: Categ
     return Object.values(cart).reduce((sum, qty) => sum + qty, 0);
   };
 
-  const handleReserveAll = async () => {
+  const handleReserveAll = async (retryCount = 0) => {
     if (Object.keys(cart).length === 0) {
       toast({
         variant: "destructive",
@@ -195,7 +201,14 @@ export default function CategoryProducts({ categoryId, onBack, onLogout }: Categ
         body: { items },
       });
 
-      if (error) throw error;
+      if (error) {
+        // Retry logic with exponential backoff for concurrent request handling
+        if (retryCount < 3 && error.message?.includes('stock')) {
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 500));
+          return handleReserveAll(retryCount + 1);
+        }
+        throw error;
+      }
 
       toast({
         title: "Checkout successful!",
@@ -403,7 +416,7 @@ export default function CategoryProducts({ categoryId, onBack, onLogout }: Categ
               </div>
               <Button
                 size="lg"
-                onClick={handleReserveAll}
+                onClick={() => handleReserveAll()}
                 disabled={isReserving || totalItems > checkoutLimit}
                 className="min-w-[200px]"
               >
