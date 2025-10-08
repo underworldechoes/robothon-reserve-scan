@@ -10,6 +10,7 @@ import { Plus, Edit, Trash2, Package2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import PartsManagement from "./PartsManagement";
+import CategoryImport from "./CategoryImport";
 
 interface Category {
   id: number;
@@ -171,53 +172,56 @@ export default function CategoryManagement({ onStatsUpdate }: CategoryManagement
               <CardTitle>Category Management</CardTitle>
               <CardDescription>Add, edit, and organize inventory categories</CardDescription>
             </div>
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Category
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add New Category</DialogTitle>
-                  <DialogDescription>Create a new inventory category</DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handleAddCategory}>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Category Name</Label>
-                      <Input id="name" name="name" placeholder="e.g., Electronics" required />
+            <div className="flex gap-2">
+              <CategoryImport onImportComplete={loadCategories} />
+              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Category
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Add New Category</DialogTitle>
+                    <DialogDescription>Create a new inventory category</DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleAddCategory}>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="name">Category Name</Label>
+                        <Input id="name" name="name" placeholder="e.g., Electronics" required />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="description">Description</Label>
+                        <Textarea id="description" name="description" placeholder="Brief description of this category" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="checkout_limit">Checkout Limit</Label>
+                        <Input 
+                          id="checkout_limit" 
+                          name="checkout_limit" 
+                          type="number" 
+                          min="1"
+                          defaultValue="10"
+                          placeholder="Max items per checkout" 
+                          required 
+                        />
+                        <p className="text-xs text-muted-foreground">Maximum number of items a user can checkout from this category at once</p>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="description">Description</Label>
-                      <Textarea id="description" name="description" placeholder="Brief description of this category" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="checkout_limit">Checkout Limit</Label>
-                      <Input 
-                        id="checkout_limit" 
-                        name="checkout_limit" 
-                        type="number" 
-                        min="1"
-                        defaultValue="10"
-                        placeholder="Max items per checkout" 
-                        required 
-                      />
-                      <p className="text-xs text-muted-foreground">Maximum number of items a user can checkout from this category at once</p>
-                    </div>
-                  </div>
-                  <DialogFooter className="mt-6">
-                    <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={isLoading}>
-                      {isLoading ? "Adding..." : "Add Category"}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
+                    <DialogFooter className="mt-6">
+                      <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={isLoading}>
+                        {isLoading ? "Adding..." : "Add Category"}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

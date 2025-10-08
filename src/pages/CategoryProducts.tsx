@@ -55,6 +55,28 @@ export default function CategoryProducts({ categoryId, onBack, onLogout }: Categ
 
   useEffect(() => {
     loadCategoryAndParts();
+
+    // Real-time updates for parts quantity
+    const partsChannel = supabase
+      .channel('parts-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'parts',
+          filter: `category_id=eq.${categoryId}`
+        },
+        (payload) => {
+          console.log('Part quantity updated:', payload);
+          loadCategoryAndParts();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(partsChannel);
+    };
   }, [categoryId]);
 
   const loadCategoryAndParts = async () => {

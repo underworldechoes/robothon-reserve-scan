@@ -49,6 +49,44 @@ export default function TeamDashboard({ onLogout, onSelectCategory }: TeamDashbo
     loadCategories();
     loadReservations();
     loadProfile();
+
+    // Set up real-time subscriptions for live updates
+    const partsChannel = supabase
+      .channel('parts-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'parts'
+        },
+        () => {
+          console.log('Parts updated, reloading categories');
+          loadCategories();
+        }
+      )
+      .subscribe();
+
+    const reservationsChannel = supabase
+      .channel('reservations-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'inventory_tracking'
+        },
+        () => {
+          console.log('Reservations updated, reloading');
+          loadReservations();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(partsChannel);
+      supabase.removeChannel(reservationsChannel);
+    };
   }, []);
 
   const loadProfile = async () => {
@@ -60,7 +98,7 @@ export default function TeamDashboard({ onLogout, onSelectCategory }: TeamDashbo
         .from("profiles")
         .select("username")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
       if (data) setTeamName(data.username);
@@ -97,7 +135,7 @@ export default function TeamDashboard({ onLogout, onSelectCategory }: TeamDashbo
         .from("profiles")
         .select("id")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
 
       if (!profile) return;
 

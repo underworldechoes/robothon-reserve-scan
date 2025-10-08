@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ClipboardList, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import ReservationExport from "./ReservationExport";
 
 interface UserProfile {
   id: string;
@@ -39,6 +40,29 @@ export default function UserReservations() {
 
   useEffect(() => {
     loadUsers();
+
+    // Real-time updates for reservations
+    const reservationsChannel = supabase
+      .channel('admin-reservations')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'inventory_tracking'
+        },
+        () => {
+          console.log('Reservations updated');
+          if (selectedUserId) {
+            loadReservations(selectedUserId);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(reservationsChannel);
+    };
   }, []);
 
   useEffect(() => {
@@ -165,6 +189,7 @@ export default function UserReservations() {
             <CardTitle>User Reservations</CardTitle>
             <CardDescription>View checkout history for each team member</CardDescription>
           </div>
+          <ReservationExport />
         </div>
       </CardHeader>
       <CardContent className="space-y-4">

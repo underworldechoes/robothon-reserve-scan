@@ -55,32 +55,11 @@ export async function serve(req: Request): Promise<Response> {
         );
       }
 
-      // Fetch part to verify stock
-      const { data: part, error: partErr } = await adminClient
-        .from("parts")
-        .select("id, name, quantity")
-        .eq("id", part_id)
-        .maybeSingle();
-        
-      if (partErr || !part) {
-        return new Response(
-          JSON.stringify({ error: `Part ${part_id} not found` }), 
-          { status: 404, headers: corsHeaders }
-        );
-      }
+      // Use a transaction to safely decrement stock and create tracking records
+      // This prevents race conditions from multiple concurrent checkouts
+      console.log(`Processing checkout: ${quantity}x Part ID ${part_id}`);
 
-      if (part.quantity < quantity) {
-        return new Response(
-          JSON.stringify({ 
-            error: `Insufficient stock for ${part.name}. Available: ${part.quantity}, Requested: ${quantity}` 
-          }), 
-          { status: 400, headers: corsHeaders }
-        );
-      }
-
-      console.log(`Checking out ${quantity}x ${part.name} (Part ID: ${part_id})`);
-
-      // Process each unit (the RPC handles one at a time)
+      // Process each unit atomically
       for (let i = 0; i < quantity; i++) {
         const { error: updateErr } = await adminClient.rpc("transaction_decrement_and_track", {
           p_part_id: part_id,
@@ -89,8 +68,24 @@ export async function serve(req: Request): Promise<Response> {
 
         if (updateErr) {
           console.error('Checkout error:', updateErr);
+          // Check if it's a stock issue
+          if (updateErr.message?.includes('quantity') || updateErr.code === '23514') {
+            const { data: partInfo } = await adminClient
+              .from("parts")
+              .select("name, quantity")
+              .eq("id", part_id)
+              .maybeSingle();
+            
+            return new Response(
+              JSON.stringify({ 
+                error: `Insufficient stock${partInfo?.name ? ` for ${partInfo.name}` : ''}. Please refresh and try again.` 
+              }), 
+              { status: 400, headers: corsHeaders }
+            );
+          }
+          
           return new Response(
-            JSON.stringify({ error: `Failed to checkout ${part.name}: ${updateErr.message}` }), 
+            JSON.stringify({ error: `Checkout failed: ${updateErr.message}` }), 
             { status: 500, headers: corsHeaders }
           );
         }

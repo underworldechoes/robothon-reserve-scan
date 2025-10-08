@@ -46,28 +46,28 @@ export type Database = {
           admin_remarks: string | null
           id: string
           notes: string | null
-          part_id: number
+          part_id: number | null
           scanned_at: string
           status: string
-          team_user_id: string
+          team_user_id: string | null
         }
         Insert: {
           admin_remarks?: string | null
           id?: string
           notes?: string | null
-          part_id: number
+          part_id?: number | null
           scanned_at?: string
           status: string
-          team_user_id: string
+          team_user_id?: string | null
         }
         Update: {
           admin_remarks?: string | null
           id?: string
           notes?: string | null
-          part_id?: number
+          part_id?: number | null
           scanned_at?: string
           status?: string
-          team_user_id?: string
+          team_user_id?: string | null
         }
         Relationships: [
           {
